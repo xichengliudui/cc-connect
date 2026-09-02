@@ -520,19 +520,20 @@ type workspaceInitFlow struct {
 // The message is NOT sent to agent stdin at queue time; the event loop
 // sends it after the current turn completes to avoid mid-turn interference.
 type queuedMessage struct {
-	messageID         string
-	platform          Platform
-	replyCtx          any
-	content           string
-	images            []ImageAttachment
-	files             []FileAttachment
-	fromVoice         bool
-	userID            string
-	userName          string // sender's display name for sender injection
-	msgPlatform       string // platform name for sender injection
-	msgSessionKey     string // session key for extracting chat ID
-	channelKey        string // platform-provided channel identifier (preferred over sessionKey extraction)
-	userMessageTimeMs int64  // Feishu create_time ms (optional); see Message.UserMessageTimeMs
+	messageID            string
+	platform             Platform
+	replyCtx             any
+	content              string
+	images               []ImageAttachment
+	files                []FileAttachment
+	fromVoice            bool
+	userID               string
+	userName             string // sender's display name for sender injection
+	msgPlatform          string // platform name for sender injection
+	msgSessionKey        string // session key for extracting chat ID
+	channelKey           string // platform-provided channel identifier (preferred over sessionKey extraction)
+	userMessageTimeMs    int64  // Feishu create_time ms (optional); see Message.UserMessageTimeMs
+	suppressInstantReply bool
 }
 
 // interactiveState tracks a running interactive agent session and its permission state.
@@ -1573,13 +1574,14 @@ func (e *Engine) ExecuteCronJob(job *CronJob) error {
 	}
 
 	msg := &Message{
-		SessionKey:   sessionKey,
-		Platform:     platformName,
-		UserID:       "cron",
-		UserName:     "cron",
-		Content:      content,
-		ReplyCtx:     replyCtx,
-		ModeOverride: job.Mode,
+		SessionKey:           sessionKey,
+		Platform:             platformName,
+		UserID:               "cron",
+		UserName:             "cron",
+		Content:              content,
+		ReplyCtx:             replyCtx,
+		ModeOverride:         job.Mode,
+		SuppressInstantReply: true,
 	}
 
 	// Resolve workspace-specific agent and sessions for multi-workspace mode.
@@ -3217,19 +3219,20 @@ func (e *Engine) queueMessageForBusySession(p Platform, msg *Message, interactiv
 		return true // handled: queue-full reply sent
 	}
 	state.pendingMessages = append(state.pendingMessages, queuedMessage{
-		messageID:         msg.MessageID,
-		platform:          p,
-		replyCtx:          msg.ReplyCtx,
-		content:           msg.Content,
-		images:            msg.Images,
-		files:             msg.Files,
-		fromVoice:         msg.FromVoice,
-		userID:            msg.UserID,
-		userName:          msg.UserName,
-		msgPlatform:       msg.Platform,
-		msgSessionKey:     msg.SessionKey,
-		channelKey:        msg.ChannelKey,
-		userMessageTimeMs: msg.UserMessageTimeMs,
+		messageID:            msg.MessageID,
+		platform:             p,
+		replyCtx:             msg.ReplyCtx,
+		content:              msg.Content,
+		images:               msg.Images,
+		files:                msg.Files,
+		fromVoice:            msg.FromVoice,
+		userID:               msg.UserID,
+		userName:             msg.UserName,
+		msgPlatform:          msg.Platform,
+		msgSessionKey:        msg.SessionKey,
+		channelKey:           msg.ChannelKey,
+		userMessageTimeMs:    msg.UserMessageTimeMs,
+		suppressInstantReply: msg.SuppressInstantReply,
 	})
 	runMessageAccepted(msg)
 	queueDepth := len(state.pendingMessages)
@@ -5033,7 +5036,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 	// Send instant confirmation reply if enabled and no streaming card is active.
 	// Streaming cards provide their own "processing" indicator, so instant reply
 	// is only needed when the platform doesn't support cards or card creation failed.
-	if e.instantReply.Enabled && streamCard == nil {
+	if e.instantReply.Enabled && !msg.SuppressInstantReply && streamCard == nil {
 		replyContent := e.instantReply.Content
 		if replyContent == "" {
 			replyContent = e.i18n.T(MsgStarting)
@@ -6207,7 +6210,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				}
 
 				// Send instant reply for queued turn if no streaming card is active.
-				if e.instantReply.Enabled && streamCard == nil {
+				if e.instantReply.Enabled && !queued.suppressInstantReply && streamCard == nil {
 					replyContent := e.instantReply.Content
 					if replyContent == "" {
 						replyContent = e.i18n.T(MsgStarting)

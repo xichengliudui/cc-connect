@@ -428,6 +428,9 @@ type Message struct {
 	ReplyCtx         any    // platform-specific context needed for replying
 	FromVoice        bool   // true if message originated from voice transcription
 	ModeOverride     string // if set, temporarily override agent permission mode for this message
+	// SuppressInstantReply skips the global immediate confirmation for internally
+	// generated messages such as Cron jobs. It does not suppress agent output.
+	SuppressInstantReply bool
 	// IsPermissionResponse is set by inline-button / card-action paths in
 	// platforms when a synthesized message is forwarded as a permission
 	// decision (e.g. Telegram handleCallbackQuery for perm:allow/deny,

@@ -13572,6 +13572,49 @@ func TestExecuteCronJob_ResolvesCronReplyTarget(t *testing.T) {
 	}
 }
 
+func TestExecuteCronJob_SkipsInstantReply(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewCronStore(dir)
+	if err != nil {
+		t.Fatalf("NewCronStore() error = %v", err)
+	}
+	scheduler := NewCronScheduler(store)
+
+	platform := &stubCronReplyTargetPlatform{
+		stubPlatformEngine: stubPlatformEngine{n: "discord"},
+	}
+	agentSession := newResultAgentSession("cron complete")
+	agent := &resultAgent{session: agentSession}
+
+	e := NewEngine("test", agent, []Platform{platform}, "", LangEnglish)
+	defer e.cancel()
+	e.cronScheduler = scheduler
+	e.SetInstantReply(InstantReplyCfg{Enabled: true, Content: "working"})
+
+	silent := true
+	job := &CronJob{
+		ID:         "job-silent",
+		SessionKey: "discord:channel-1:user-1",
+		Prompt:     "run inspection",
+		Silent:     &silent,
+	}
+	if err = store.Add(job); err != nil {
+		t.Fatalf("store.Add() error = %v", err)
+	}
+
+	if err = e.ExecuteCronJob(job); err != nil {
+		t.Fatalf("ExecuteCronJob() error = %v", err)
+	}
+
+	sent := platform.getSent()
+	if len(sent) != 1 {
+		t.Fatalf("sent messages = %d, want only the agent result: %#v", len(sent), sent)
+	}
+	if sent[0] != "cron complete" {
+		t.Fatalf("sent[0] = %q, want agent result", sent[0])
+	}
+}
+
 func TestExecuteCronJob_WorkspacePrefixedSessionKey(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewCronStore(dir)
