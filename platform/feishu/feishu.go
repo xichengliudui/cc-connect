@@ -125,6 +125,7 @@ type Platform struct {
 	reactionEmoji              string
 	doneEmoji                  string
 	allowFrom                  string
+	allowBotFrom               string
 	allowChat                  string
 	groupOnly                  bool
 	groupReplyAll              bool
@@ -346,6 +347,10 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 	}
 	allowFrom, _ := opts["allow_from"].(string)
 	core.CheckAllowFrom(name, allowFrom)
+	allowBotFrom, _ := opts["allow_bot_from"].(string)
+	if strings.TrimSpace(allowBotFrom) == "*" {
+		return nil, fmt.Errorf("%s: allow_bot_from must list explicit bot sender IDs", name)
+	}
 	allowChat, _ := opts["allow_chat"].(string)
 	groupOnly, _ := opts["group_only"].(bool)
 	groupReplyAll, _ := opts["group_reply_all"].(bool)
@@ -463,6 +468,7 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 		reactionEmoji:              reactionEmoji,
 		doneEmoji:                  doneEmoji,
 		allowFrom:                  allowFrom,
+		allowBotFrom:               allowBotFrom,
 		allowChat:                  allowChat,
 		groupOnly:                  groupOnly,
 		groupReplyAll:              groupReplyAll,
@@ -1416,6 +1422,7 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 		chatID = *msg.ChatId
 	}
 	userID := userIDFromEvent(sender.SenderId)
+	senderType := stringValue(sender.SenderType)
 	// userName and chatName are resolved in dispatchMessage to avoid blocking
 	// the SDK dispatcher goroutine with synchronous HTTP calls.
 
@@ -1455,6 +1462,7 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 		"message_id", messageID,
 		"chat_id", chatID,
 		"chat_type", chatType,
+		"sender_type", senderType,
 		"root_id", stringValue(msg.RootId),
 		"thread_id", stringValue(msg.ThreadId),
 		"parent_id", stringValue(msg.ParentId),
@@ -1507,7 +1515,14 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 		}
 	}
 
-	if !core.AllowList(p.allowFrom, userID) {
+	isBotSender := senderType == "app"
+	if isBotSender {
+		if !isAllowedBotSender(p.allowBotFrom, userID) {
+			slog.Info(p.tag()+": ignored untrusted bot message", "sender_id", userID, "chat_id", chatID)
+			return nil
+		}
+	}
+	if !isBotSender && !core.AllowList(p.allowFrom, userID) {
 		slog.Debug(p.tag()+": message from unauthorized user", "user", userID)
 		p.replyUnauthorizedAccess(ctx, replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey})
 		return nil
@@ -1909,6 +1924,14 @@ func userIDFromEvent(id *larkim.UserId) string {
 		return *id.UnionId
 	}
 	return ""
+}
+
+func isAllowedBotSender(allowBotFrom, senderID string) bool {
+	if strings.TrimSpace(allowBotFrom) == "" || senderID == "" {
+		return false
+	}
+
+	return core.AllowList(allowBotFrom, senderID)
 }
 
 func isValidFeishuLookupID(id string) bool {

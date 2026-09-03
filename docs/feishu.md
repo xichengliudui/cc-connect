@@ -113,9 +113,11 @@ app_secret = "QhkMpxxxxxxxxxxxxxxxxxxxx"
 # progress_style = "legacy"  # 可选：legacy | compact | card
 # done_emoji = "none"          # 可选：agent 完成回复后添加的表情回复（如 "Done"）；设为 "none" 可禁用
 # image_batch_window_ms = 500  # 可选：连续多图合批窗口（默认 500ms，详见下文）
+# allow_bot_from = "cli_alert_hub" # 可选：允许触发机器人的机器人 sender_id，逗号分隔
 ```
 
 > 如果应用没有交互卡片权限，或后台未配置卡片回调，可将 `enable_feishu_card = false`，让所有命令统一走纯文本回复，避免卡片发送失败后用户看不到内容。
+> `allow_bot_from` 仅用于允许指定机器人在群内触发本机器人。它默认拒绝所有机器人，必须配置明确的机器人 `sender_id`，不支持 `*`；群聊、`allow_chat` 和原生 @ 机器人校验仍会同时生效。人工用户继续仅由 `allow_from` 控制。
 > 如果开启 `thread_isolation = true`，群聊里每个根消息 / reply thread 会对应一个独立 agent session；私聊行为保持原样。
 > 在 multi-workspace 模式下，`thread_isolation = true` 也会让每个话题独立绑定 workspace；在话题内执行 `/workspace bind <name>` 不会影响同群的其他话题。已有的群级 binding 会保留为默认值，由尚未显式绑定的话题继承，因此回退到旧版本时仍可使用。
 > `progress_style = "compact"` 会把思考/工具进度合并到一条可更新消息里，减少刷屏；`legacy` 保持原有逐条发送；`card` 会使用结构化卡片（标题 + 进度块）持续更新同一条消息，观感比纯文本更清晰。

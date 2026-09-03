@@ -2172,3 +2172,47 @@ func TestFlushImageBatchForSession_NoBatchIsSafe(t *testing.T) {
 		t.Fatalf("imageBatch size = %d, want 0", n)
 	}
 }
+
+func TestIsAllowedBotSender(t *testing.T) {
+	tests := []struct {
+		name         string
+		allowBotFrom string
+		senderID     string
+		want         bool
+	}{
+		{
+			name:     "empty allow list rejects bot",
+			senderID: "cli_alert_hub",
+		},
+		{
+			name:         "matching bot is allowed",
+			allowBotFrom: "cli_alert_hub",
+			senderID:     "cli_alert_hub",
+			want:         true,
+		},
+		{
+			name:         "multiple allowed bots",
+			allowBotFrom: "cli_first, cli_alert_hub",
+			senderID:     "cli_alert_hub",
+			want:         true,
+		},
+		{
+			name:         "unknown bot is rejected",
+			allowBotFrom: "cli_alert_hub",
+			senderID:     "cli_unknown",
+		},
+		{
+			name:         "empty sender id is rejected",
+			allowBotFrom: "cli_alert_hub",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			isAllowed := isAllowedBotSender(testCase.allowBotFrom, testCase.senderID)
+			if isAllowed != testCase.want {
+				t.Fatalf("isAllowedBotSender(%q, %q) = %t, want %t", testCase.allowBotFrom, testCase.senderID, isAllowed, testCase.want)
+			}
+		})
+	}
+}
